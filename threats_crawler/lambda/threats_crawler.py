@@ -1,20 +1,27 @@
 import requests
 from bs4 import BeautifulSoup
-import time
 import re
+import logging
+
+# Set up basic logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Define keywords for different cyber threat data components
 cyber_threat_categories = {
-    "Attack Vectors": ["phishing", "malware", "ransomware", "denial-of-service", "dos", "supply chain", "zero-day", "sql injection"],
+    "Attack Vectors": ["phishing", "malware", "ransomware", "denial-of-service", "dos", "supply chain", "zero-day",
+                       "sql injection"],
     "TTPs": ["tactics", "techniques", "procedures", "mitre", "spear phishing", "credential dumping"],
     "IoCs": ["ioc", "indicators", "ip address", "domain", "file hash", "md5", "sha-256", "registry"],
-    "Attack Timelines": ["reconnaissance", "initial compromise", "lateral movement", "data exfiltration", "persistence"],
+    "Attack Timelines": ["reconnaissance", "initial compromise", "lateral movement", "data exfiltration",
+                         "persistence"],
     "Incident Reports": ["incident report", "case study", "breach", "forensic", "analysis"],
     "Threat Intelligence Feeds": ["threat intelligence", "feed", "alienvault", "recorded future", "threat feed"]
 }
 
 # Regular expression to find CVE identifiers
 cve_pattern = re.compile(r"CVE-\d{4}-\d{4,7}")
+
 
 def analyze_content(content):
     """
@@ -37,38 +44,39 @@ def analyze_content(content):
 
     return analysis_results
 
+
 def crawl_and_analyze(url):
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; Python crawler)'}
-
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.RequestException as e:
-        print(f"Error fetching {url}: {e}")
+        logger.error(f"Error fetching {url}: {e}")
         return None
 
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    # Attempt to extract main content from <article> or fallback to all text
+    # Try to extract main content within <article> or fallback to entire text if not found.
     article = soup.find("article")
     content = article.get_text(separator=" ", strip=True) if article else soup.get_text(separator=" ", strip=True)
 
     # Analyze the content for cyber threat data components
     analysis_results = analyze_content(content)
 
-    print(f"\nURL: {url}")
+    logger.info(f"URL: {url}")
     if analysis_results:
-        print("Cyber Threat Data Identified:")
+        logger.info("Cyber Threat Data Identified:")
         for category, items in analysis_results.items():
-            print(f"{category}:")
             for item in items:
-                print(f"  - {item}")
+                logger.info(f"  - {category}: {item}")
     else:
-        print("No specific cyber threat data found.")
+        logger.info("No specific cyber threat data found.")
 
     return analysis_results
 
-if __name__ == "__main__":
+
+def lambda_handler(event, context):
+    # List of cybersecurity websites to crawl
     websites = [
         "https://krebsonsecurity.com/",
         "https://www.schneier.com/",
@@ -78,11 +86,20 @@ if __name__ == "__main__":
         "https://isc.sans.edu/"
     ]
 
+    results = {}
     for site in websites:
-        print(f"Fetching and analyzing: {site}")
-        crawl_and_analyze(site)
-        # Introduce a polite delay between requests
-        time.sleep(2)
+        logger.info(f"Fetching and analyzing: {site}")
+        result = crawl_and_analyze(site)
+        results[site] = result
+
+    # Optionally, you can process results further (e.g., store in S3, send notifications)
+    logger.info("Crawling complete.")
+
+    return {
+        "statusCode": 200,
+        "body": results
+    }
+
 
 
 
