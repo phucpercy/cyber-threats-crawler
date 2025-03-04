@@ -2,10 +2,20 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import logging
+import boto3
+import hashlib
+import json
+from datetime import datetime
+from botocore.exceptions import ClientError
 
 # Set up basic logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Initialize DynamoDB resource and specify your table name
+dynamodb = boto3.resource('dynamodb')
+TABLE_NAME = 'CyberThreatData'
+table = dynamodb.Table(TABLE_NAME)
 
 # Define keywords for different cyber threat data components
 cyber_threat_categories = {
@@ -52,27 +62,56 @@ def crawl_and_analyze(url):
         response.raise_for_status()
     except requests.RequestException as e:
         logger.error(f"Error fetching {url}: {e}")
-        return None
+        return None, None
 
     soup = BeautifulSoup(response.text, 'html.parser')
-
     # Try to extract main content within <article> or fallback to entire text if not found.
     article = soup.find("article")
     content = article.get_text(separator=" ", strip=True) if article else soup.get_text(separator=" ", strip=True)
 
-    # Analyze the content for cyber threat data components
     analysis_results = analyze_content(content)
+    return analysis_results, content
 
-    logger.info(f"URL: {url}")
-    if analysis_results:
-        logger.info("Cyber Threat Data Identified:")
-        for category, items in analysis_results.items():
-            for item in items:
-                logger.info(f"  - {category}: {item}")
-    else:
-        logger.info("No specific cyber threat data found.")
 
-    return analysis_results
+def generate_threat_id(source, analysis_results):
+    """
+    Generate a unique ThreatID based on the source and canonicalized threat data.
+    """
+    # Convert analysis_results to a canonical JSON string
+    canonical_data = json.dumps(analysis_results, sort_keys=True)
+    # Concatenate the source and canonical threat data then hash it
+    data_to_hash = source + canonical_data
+    threat_id = hashlib.sha256(data_to_hash.encode('utf-8')).hexdigest()
+    return threat_id
+
+
+def save_to_dynamodb(source, analysis_results, raw_content):
+    """
+    Save the analyzed threat data to DynamoDB using a conditional write to avoid duplicates.
+    """
+    timestamp = datetime.utcnow().isoformat() + "Z"  # e.g., "2025-03-04T12:00:00Z"
+    threat_id = generate_threat_id(source, analysis_results)
+
+    item = {
+        "ThreatID": threat_id,
+        "Source": source,
+        "CrawlTimestamp": timestamp,
+        "ThreatCategories": analysis_results,
+        "RawContent": raw_content
+    }
+
+    try:
+        # Use a condition expression to ensure no duplicate ThreatID exists.
+        table.put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(ThreatID)"
+        )
+        logger.info(f"Record saved for {source} with ThreatID: {threat_id}")
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            logger.info(f"Duplicate record for ThreatID: {threat_id}. Skipping insert.")
+        else:
+            logger.error(f"Error saving record to DynamoDB: {e}")
 
 
 def lambda_handler(event, context):
@@ -89,17 +128,15 @@ def lambda_handler(event, context):
     results = {}
     for site in websites:
         logger.info(f"Fetching and analyzing: {site}")
-        result = crawl_and_analyze(site)
-        results[site] = result
+        analysis_results, raw_content = crawl_and_analyze(site)
+        if analysis_results is not None:
+            save_to_dynamodb(site, analysis_results, raw_content)
+            results[site] = analysis_results
+        else:
+            results[site] = "Error fetching or analyzing data."
 
-    # Optionally, you can process results further (e.g., store in S3, send notifications)
-    logger.info("Crawling complete.")
-
+    logger.info("Crawling and saving complete.")
     return {
         "statusCode": 200,
         "body": results
     }
-
-
-
-
