@@ -1,9 +1,8 @@
 from aws_cdk import (
   Stack,
-  aws_lambda as _lambda, Duration,
-  aws_iam as iam,
+  aws_lambda as _lambda, aws_iam as iam,
   aws_dynamodb as dynamodb, RemovalPolicy,
-  aws_apigatewayv2 as apigateway,
+  aws_apigateway as apigateway, DockerImage,
 )
 from constructs import Construct
 
@@ -22,9 +21,16 @@ class ThreatsCrawlerStack(Stack):
             self,
             "MonitoringFunction",
             runtime=_lambda.Runtime.PYTHON_3_11,
-            code=_lambda.Code.from_asset("canary_monitoring/lambda"),
-            handler="resources_monitor.measuring_handler",
-            timeout=Duration.seconds(60),
+            code=_lambda.Code.from_asset("threats_crawler/lambda",
+                bundling={
+                    'image': DockerImage.from_registry('python:3.11'),
+                    'command': [
+                        'bash', '-c',
+                        'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output'
+                    ],
+                }
+            ),
+            handler="threats_crawler.lambda_handler",
             initial_policy=[
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
