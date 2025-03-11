@@ -1,8 +1,9 @@
 from aws_cdk import (
   Stack,
+  aws_events as events,
   aws_lambda as _lambda, aws_iam as iam,
   aws_dynamodb as dynamodb, RemovalPolicy,
-  aws_apigateway as apigateway, DockerImage,
+  aws_apigateway as apigateway, DockerImage, Duration,
 )
 from constructs import Construct
 
@@ -12,6 +13,7 @@ class ThreatsCrawlerStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
       super().__init__(scope, construct_id, **kwargs)
       threat_crawler_lambda = self.create_threat_crawler_lambda()
+      self.create_crawler_scheduler(threat_crawler_lambda, Duration.minutes(10))
       self.create_dynamodb_database()
       self.create_test_gateway(threat_crawler_lambda)
 
@@ -58,7 +60,7 @@ class ThreatsCrawlerStack(Stack):
           ),
           read_capacity=5,
           write_capacity=5,
-          removal_policy=RemovalPolicy.DESTROY  # Use DESTROY for dev; change to RETAIN for production
+          removal_policy=RemovalPolicy.DESTROY
       )
 
     def create_test_gateway(self, threat_lambda):
@@ -67,4 +69,11 @@ class ThreatsCrawlerStack(Stack):
           rest_api_name="CyberThreatApi",
           handler=threat_lambda,  # API calls will trigger this Lambda
           proxy=True  # Proxy integration sends all requests to the Lambda
+      )
+
+    def create_crawler_scheduler(self, threat_lambda, duration):
+      rule = events.Rule(
+          self, "ThreatCrawlerRule",
+          schedule=events.Schedule.rate(duration),
+          targets=[threat_lambda]
       )
