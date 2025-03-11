@@ -150,10 +150,3 @@ def lambda_handler(event, context):
     "statusCode": 200,
     "body": results
   }
-
-
-def main():
-  lambda_handler(None, None)
-
-
-main()
