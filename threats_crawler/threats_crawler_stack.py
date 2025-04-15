@@ -11,7 +11,7 @@ from constructs import Construct
 
 class ThreatsCrawlerStack(Stack):
 
-  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+  def __init__(self, scope: Construct, construct_id: str, stage_name: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
     threat_crawler_lambda = self.create_threat_crawler_lambda()
     self.create_crawler_scheduler(threat_crawler_lambda, Duration.minutes(10))

@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-import os
 
 import aws_cdk as cdk
 
-from threats_crawler.threats_crawler_stack import ThreatsCrawlerStack
-
+from threats_crawler.pipeline_stack import ThreatCrawlerPipelineStack
 
 app = cdk.App()
-ThreatsCrawlerStack(app, "ThreatsCrawlerStack",
+ThreatCrawlerPipelineStack(app, "ThreatsCrawlerStack",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.
