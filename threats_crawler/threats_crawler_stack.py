@@ -13,15 +13,15 @@ class ThreatsCrawlerStack(Stack):
 
   def __init__(self, scope: Construct, construct_id: str, stage_name: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
-    threat_crawler_lambda = self.create_threat_crawler_lambda()
-    self.create_crawler_scheduler(threat_crawler_lambda, Duration.minutes(10))
-    self.create_dynamodb_database()
-    self.create_test_gateway(threat_crawler_lambda)
+    threat_crawler_lambda = self.create_threat_crawler_lambda(stage_name)
+    self.create_crawler_scheduler(threat_crawler_lambda, Duration.minutes(10), stage_name)
+    self.create_dynamodb_database(stage_name)
+    # self.create_test_gateway(threat_crawler_lambda)
 
-  def create_threat_crawler_lambda(self):
+  def create_threat_crawler_lambda(self, stage_name: str):
     threat_crawler_function = _lambda.Function(
         self,
-        "MonitoringFunction",
+        stage_name + "MonitoringFunction",
         runtime=_lambda.Runtime.PYTHON_3_11,
         code=_lambda.Code.from_asset("threats_crawler/lambda"),
         handler="threats_crawler.lambda_handler",
@@ -42,10 +42,10 @@ class ThreatsCrawlerStack(Stack):
     )
     return threat_crawler_function
 
-  def create_dynamodb_database(self):
+  def create_dynamodb_database(self, stage_name: str):
     dynamodb.Table(
         self, "CyberThreatData",
-        table_name="CyberThreatData",
+        table_name=stage_name + "CyberThreatData",
         partition_key=dynamodb.Attribute(
             name="ThreatID",
             type=dynamodb.AttributeType.STRING
@@ -63,10 +63,10 @@ class ThreatsCrawlerStack(Stack):
         proxy=True  # Proxy integration sends all requests to the Lambda
     )
 
-  def create_crawler_scheduler(self, threat_lambda, duration):
+  def create_crawler_scheduler(self, threat_lambda, duration, stage_name: str):
     events.Rule(
         self, "ThreatCrawlerRule",
-        rule_name="ThreatCrawlerScheduler",
+        rule_name=stage_name + "ThreatCrawlerScheduler",
         schedule=events.Schedule.rate(duration),
         targets=[events_targets.LambdaFunction(handler=threat_lambda,)],
     )
