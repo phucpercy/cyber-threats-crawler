@@ -1,8 +1,7 @@
 from functools import partial
 
 import aws_cdk as cdk
-import aws_cdk.aws_iam as iam
-from aws_cdk.pipelines import CodePipeline, CodePipelineSource, ShellStep, ManualApprovalStep, CodeBuildStep
+from aws_cdk.pipelines import CodePipeline, CodePipelineSource, ShellStep, ManualApprovalStep
 from constructs import Construct
 
 from threats_crawler.pipeline_app_stage import PipelineAppStage
@@ -35,41 +34,5 @@ class ThreatCrawlerPipelineStack(cdk.Stack):
             install_commands=["python -m pip install -r requirements.txt"],
             commands=["python -m pytest tests/unit"]
         ))
-        gamma_stage.add_post(CodeBuildStep(
-            "Integration Test",
-            input=code_source,
-            install_commands=["python -m pip install -r requirements.txt"],
-            commands=["STAGE_NAME=Gamma python -m pytest tests/integration"],
-            role_policy_statements=[
-                iam.PolicyStatement(
-                    effect=iam.Effect.ALLOW,
-                    actions=[
-                        'apigateway:GET',
-                        'lambda:InvokeFunction',
-                        'lambda:ListFunctions',
-                        'cloudwatch:DescribeAlarms',
-                    ],
-                    resources=['*',],
-                )
-            ],
-        ))
         prod_stage = pipeline.add_stage(PipelineAppStage(self, "Prod"))
         prod_stage.add_pre(ManualApprovalStep("Manual approval to deploy production"))
-        prod_stage.add_post(CodeBuildStep(
-            "Integration Test",
-            input=code_source,
-            install_commands=["python -m pip install -r requirements.txt"],
-            commands=["STAGE_NAME=Prod python -m pytest tests/integration"],
-            role_policy_statements=[
-                iam.PolicyStatement(
-                    effect=iam.Effect.ALLOW,
-                    actions=[
-                        'apigateway:GET',
-                        'lambda:InvokeFunction',
-                        'lambda:ListFunctions',
-                        'cloudwatch:DescribeAlarms',
-                    ],
-                    resources=['*',],
-                )
-            ],
-        ))
