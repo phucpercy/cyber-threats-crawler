@@ -6,8 +6,8 @@ import sys
 from datetime import datetime
 
 import boto3
-import requests
 from botocore.exceptions import ClientError
+from botocore.vendored import requests
 from bs4 import BeautifulSoup
 
 # Set up basic logging
